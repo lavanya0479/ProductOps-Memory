@@ -1,7 +1,39 @@
 from datetime import datetime, timezone
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
+class TeachMemoryRequest(BaseModel):
+    product: str = Field(..., min_length=1)
+    productVersion: str = Field(..., min_length=1)
+    issue: str = Field(..., min_length=1)
+
+    whatHappened: str = Field(..., min_length=1)
+    whatDidYouTry: str = Field(..., min_length=1)
+    whatWorked: str = Field(..., min_length=1)
+    whatFailed: str = Field(..., min_length=1)
+
+    additionalContext: str = ""
+    source: str = Field(..., min_length=1)
+
+
+class RecallMemoryRequest(BaseModel):
+    query: str = Field(..., min_length=1)
+
+
+class MemoryResponse(BaseModel):
+    success: bool
+    message: str
+    items_count: int = 0
+
+
+class RecallMemoryItem(BaseModel):
+    text: str
+    rank: int
+
+
+class RecallMemoryResponse(BaseModel):
+    success: bool
+    results: list[RecallMemoryItem]
 
 class TeachRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
