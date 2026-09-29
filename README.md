@@ -325,6 +325,10 @@ ProductOps Memory aims to:
 
 ## 🚀 Getting Started
 
+### Backend quick start
+
+The FastAPI backend and its Hindsight setup instructions are in [`backend/README.md`](backend/README.md). Start a local Hindsight service, install `backend/requirements.txt`, set `backend/.env` from `.env.example`, then launch from the `backend/` directory with `uvicorn app.main:app --reload`. API usage is documented in [`docs/API.md`](docs/API.md) and [`docs/FRONTEND_CONTRACT.md`](docs/FRONTEND_CONTRACT.md).
+
 ### Prerequisites
 
 * Node.js / Python *(depending on the final implementation)*
