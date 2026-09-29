@@ -325,6 +325,10 @@ ProductOps Memory aims to:
 
 ## 🚀 Getting Started
 
+### Backend quick start
+
+The FastAPI backend uses Hindsight for persistent memory and Ollama for local answer generation by default. Setup instructions, including the Hindsight server, are in [`backend/README.md`](backend/README.md). API usage is documented in [`docs/API.md`](docs/API.md) and [`docs/FRONTEND_CONTRACT.md`](docs/FRONTEND_CONTRACT.md).
+
 ### Prerequisites
 
 * Node.js / Python *(depending on the final implementation)*
