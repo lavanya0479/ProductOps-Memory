@@ -1,21 +1,25 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import Link from "next/link";
-
-type Memory = {
-  product: string;
-  version?: string;
-  issue: string;
-  experience: string;
-  source: string;
-};
+import { useSearchParams } from "next/navigation";
+import { chatWithAgent, correctMemory } from "@/lib/api";
+import type { MemoryResult } from "@/lib/types";
 
 export default function ChatPage() {
-  const [product, setProduct] = useState("");
-  const [question, setQuestion] = useState("");
+  return <Suspense fallback={<main className="min-h-screen bg-slate-950" />}><ChatForm /></Suspense>;
+}
+
+function ChatForm() {
+  const searchParams = useSearchParams();
+  const [product, setProduct] = useState(searchParams.get("product") ?? "");
+  const [version, setVersion] = useState("");
+  const [question, setQuestion] = useState(searchParams.get("issue") ?? "");
   const [loading, setLoading] = useState(false);
   const [asked, setAsked] = useState(false);
+  const [answer, setAnswer] = useState("");
+  const [memories, setMemories] = useState<MemoryResult[]>([]);
+  const [error, setError] = useState("");
 
   // Correction state
   const [showCorrection, setShowCorrection] = useState(false);
@@ -23,18 +27,9 @@ export default function ChatPage() {
   const [explanation, setExplanation] = useState("");
   const [correctionLoading, setCorrectionLoading] = useState(false);
   const [correctionSubmitted, setCorrectionSubmitted] = useState(false);
+  const [correctionError, setCorrectionError] = useState("");
 
-  // Temporary mock memory
-  const mockMemory: Memory = {
-    product: "Product X",
-    version: "4.2",
-    issue: "E401 Authentication Error",
-    experience:
-      "Restarting did not resolve previous cases. Updating authentication mapping resolved the issue for customers using legacy authentication.",
-    source: "Team Experience",
-  };
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!product.trim() || !question.trim()) {
@@ -43,13 +38,21 @@ export default function ChatPage() {
 
     setLoading(true);
     setAsked(false);
-
-    // Temporary mock request.
-    // This will later be replaced by the real backend API.
-    setTimeout(() => {
-      setLoading(false);
+    setError("");
+    try {
+      const result = await chatWithAgent({
+        message: question,
+        product: product.trim(),
+        version: version.trim() || undefined,
+      });
+      setAnswer(result.answer);
+      setMemories(result.memories);
       setAsked(true);
-    }, 1000);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not reach the backend");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleOpenCorrection() {
@@ -61,19 +64,26 @@ export default function ChatPage() {
     setShowCorrection(false);
   }
 
-  function handleSubmitCorrection() {
-    if (!correction.trim()) {
+  async function handleSubmitCorrection() {
+    if (!correction.trim() || memories.length === 0) {
       return;
     }
 
     setCorrectionLoading(true);
-
-    // Temporary mock correction request.
-    // This will later use POST /api/memory/correct.
-    setTimeout(() => {
-      setCorrectionLoading(false);
+    setCorrectionError("");
+    try {
+      await correctMemory({
+        original_context: memories[0].text,
+        correction: [correction.trim(), explanation.trim()].filter(Boolean).join("\n\nAdditional explanation: "),
+        product: product.trim(),
+        version: version.trim() || undefined,
+      });
       setCorrectionSubmitted(true);
-    }, 1000);
+    } catch (requestError) {
+      setCorrectionError(requestError instanceof Error ? requestError.message : "Could not save the correction");
+    } finally {
+      setCorrectionLoading(false);
+    }
   }
 
   function handleEditCorrection() {
@@ -145,6 +155,18 @@ export default function ChatPage() {
               />
             </div>
 
+            <div>
+              <label htmlFor="version" className="mb-2 block text-sm font-medium">Product version (optional)</label>
+              <input
+                id="version"
+                type="text"
+                value={version}
+                onChange={(event) => setVersion(event.target.value)}
+                placeholder="e.g. 5.0"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-slate-400"
+              />
+            </div>
+
             {/* Question */}
             <div>
               <label
@@ -188,7 +210,13 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Mock response */}
+        {error && (
+          <div role="alert" className="mt-8 rounded-xl border border-red-900 bg-red-950/40 px-5 py-4 text-sm text-red-200">
+            {error}
+          </div>
+        )}
+
+        {/* Backend response */}
         {asked && !loading && (
           <div className="mt-8 space-y-6">
             {/* Agent Answer */}
@@ -199,20 +227,15 @@ export default function ChatPage() {
                 </h2>
 
                 <span className="whitespace-nowrap rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">
-                  Memory found
+                  {memories.length ? "Memory found" : "No memory found"}
                 </span>
               </div>
 
-              <p className="leading-7 text-slate-300">
-                For Product X, check whether the affected customer is using
-                legacy authentication. Previous team experience shows that
-                restarting the service did not resolve this E401 issue.
-                Updating the authentication mapping resolved previous cases.
-              </p>
+              <p className="leading-7 text-slate-300">{answer}</p>
             </section>
 
             {/* Organizational Memory */}
-            <section>
+            {memories.length > 0 && <section>
               <div className="mb-4">
                 <h2 className="text-xl font-semibold">
                   Organizational Memory
@@ -223,31 +246,14 @@ export default function ChatPage() {
                 </p>
               </div>
 
-              {/* Memory Card */}
-              <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+              {memories.map((memory, index) => <article key={`${memory.rank}-${index}`} className="mb-4 rounded-2xl border border-slate-800 bg-slate-900 p-6">
                 <div className="mb-5 flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-lg font-semibold">
-                      {mockMemory.issue}
-                    </h3>
-
-                    <p className="mt-1 text-sm text-slate-400">
-                      {mockMemory.product}
-                      {mockMemory.version &&
-                        ` • Version ${mockMemory.version}`}
-                    </p>
-                  </div>
-
-                  <span className="whitespace-nowrap rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">
-                    {mockMemory.source}
-                  </span>
+                  <h3 className="text-lg font-semibold">Memory {memory.rank ?? index + 1}</h3>
+                  <span className="whitespace-nowrap rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">{memory.source}</span>
                 </div>
+                <p className="whitespace-pre-wrap leading-7 text-slate-300">{memory.text}</p>
 
-                <p className="leading-7 text-slate-300">
-                  {mockMemory.experience}
-                </p>
-
-                {!correctionSubmitted && (
+                {index === 0 && !correctionSubmitted && (
                   <button
                     type="button"
                     onClick={handleOpenCorrection}
@@ -256,8 +262,9 @@ export default function ChatPage() {
                     Correct this knowledge
                   </button>
                 )}
-              </article>
+              </article>)}
             </section>
+            }
 
             {/* Correction Form */}
             {showCorrection && !correctionSubmitted && (
@@ -282,7 +289,7 @@ export default function ChatPage() {
 
                     <input
                       type="text"
-                      value={mockMemory.product}
+                      value={product}
                       readOnly
                       className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-slate-400"
                     />
@@ -296,8 +303,9 @@ export default function ChatPage() {
 
                     <input
                       type="text"
-                      value="5"
-                      readOnly
+                      value={version}
+                      onChange={(event) => setVersion(event.target.value)}
+                      placeholder="Enter the version this correction applies to"
                       className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-slate-400"
                     />
                   </div>
@@ -309,7 +317,7 @@ export default function ChatPage() {
                     </label>
 
                     <div className="rounded-lg border border-slate-700 bg-slate-950 p-4 text-sm leading-6 text-slate-400">
-                      {mockMemory.experience}
+                      {memories[0]?.text}
                     </div>
                   </div>
 
@@ -356,6 +364,7 @@ export default function ChatPage() {
                   </div>
 
                   {/* Buttons */}
+                  {correctionError && <p role="alert" className="text-sm text-red-300">{correctionError}</p>}
                   <div className="flex flex-wrap gap-3">
                     <button
                       type="button"

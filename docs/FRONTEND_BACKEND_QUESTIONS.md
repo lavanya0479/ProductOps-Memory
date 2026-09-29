@@ -1,88 +1,15 @@
-﻿# Frontend ↔ Backend Questions
+# Frontend and backend integration status
 
-The frontend is currently being developed before the backend API implementation is available.
+The frontend contract is implemented by the FastAPI service. See [`API.md`](API.md) for request and response examples and [`FRONTEND_CONTRACT.md`](FRONTEND_CONTRACT.md) for the UI mapping.
 
-## 1. Chat API
+## Confirmed configuration
 
-Endpoint expected:
+- Frontend API origin: `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:8000`).
+- Backend allowed browser origins: `CORS_ORIGINS` (defaults to `http://localhost:3000,http://localhost:5173`). Set this to the exact deployed frontend origin(s).
+- The app has no user login or app-level bearer token. `HINDSIGHT_API_KEY` is a backend-only optional credential for secured Hindsight deployments.
+- The configured app uses Hindsight (`MEMORY_BACKEND=hindsight`) for persistent memory and Ollama (`LLM_PROVIDER=ollama`) for answer generation. The Hindsight API service must be started at `HINDSIGHT_BASE_URL` (default `http://localhost:8888`).
+- SQLite (`MEMORY_BACKEND=sqlite`) is an optional local fallback. Deployments can use `LLM_PROVIDER=openai` with backend `LLM_API_KEY` and optional `LLM_MODEL` / `LLM_BASE_URL`.
 
-POST /api/chat
+## Known API boundary
 
-Questions:
-- What is the exact request body?
-- What is the exact response body?
-- Does the response include the recalled memory?
-- Does it include supporting evidence?
-- Does it include product/version information?
-- Does it include confidence or relevance information?
-
-## 2. Teach Memory API
-
-Endpoint expected:
-
-POST /api/memory/teach
-
-Questions:
-- What fields are required?
-- What is the exact request schema?
-- What is the exact response schema?
-- Does the response return the created memory ID?
-- Does it return source/type information?
-
-## 3. Recall Memory API
-
-Endpoint expected:
-
-POST /api/memory/recall
-
-Questions:
-- What is the exact request body?
-- What is the exact response body?
-- How are multiple memories returned?
-- Does each memory include product/version/source information?
-
-## 4. Correct Memory API
-
-Endpoint expected:
-
-POST /api/memory/correct
-
-Questions:
-- What fields are required?
-- What is the exact request schema?
-- What is the exact response schema?
-- Does the response identify the updated memory?
-
-## 5. Memories Page
-
-The frontend currently does not have a confirmed backend endpoint for listing memories.
-
-Questions:
-- Will there be a GET endpoint for listing memories?
-- If yes, what is the endpoint and response schema?
-- What fields should be displayed on each memory card?
-
-Until this is confirmed, the /memories page will use mock data.
-
-## 6. Memory Metadata
-
-Please confirm whether backend responses will provide:
-
-- Product
-- Product version
-- Issue
-- Source/type
-- Memory category
-- Created date
-- Updated date
-- Historical/current status
-- Evidence or source information
-
-## 7. Backend Availability
-
-Please confirm:
-
-- Backend base URL
-- CORS configuration for the frontend
-- API authentication requirements, if any
-- Expected error response format
+`POST /api/memory/recall` returns memories relevant to the submitted query and optional product filter. There is no list-all endpoint and the response does not include stable IDs, dates, or structured product/version/source metadata. The Memories page therefore offers search results and does not claim to show a complete inventory. A complete browse page would require an explicitly designed backend listing endpoint backed by the memory service.

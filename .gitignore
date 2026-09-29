@@ -3,4 +3,7 @@
 **/__pycache__/
 **/.pytest_cache/
 **/.venv/
+**/.hindsight-venv/
 *.py[cod]
+**/*.sqlite
+**/*.sqlite3

@@ -2,7 +2,7 @@
 
 ## Base URL
 
-Local development: `http://localhost:8000`. FastAPI OpenAPI UI: `/docs`.
+Local development: `http://localhost:8000`. FastAPI OpenAPI UI: `/docs`. The browser client reads `NEXT_PUBLIC_API_BASE_URL` (default `http://localhost:8000`). Set backend `CORS_ORIGINS` to the exact frontend origin(s).
 
 ## Endpoints
 
@@ -15,6 +15,8 @@ Local development: `http://localhost:8000`. FastAPI OpenAPI UI: `/docs`.
 | POST | `/api/chat` | `{message, product?, version?}` | `{answer, memories:[{text,rank,source}], has_relevant_memory}` |
 
 All bodies and responses use JSON. Optional values can be omitted. `limit` defaults to 8 and is limited to 1–20. Empty recall is successful, with `memories: []` and `has_relevant_memory: false`.
+
+Recall is query-based semantic search, not a list-all operation. Returned memories may not represent the entire Hindsight bank and do not include stable IDs or timestamps. The frontend's Memories page requires a search query and labels these as matching memories.
 
 ## Errors
 

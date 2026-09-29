@@ -7,10 +7,18 @@ class HindsightMemory:
     def __init__(self, client=None, bank_id: str | None = None):
         settings = get_settings()
         self.bank_id = bank_id or settings.hindsight_bank_id
-        options = {"base_url": settings.hindsight_base_url}
-        if settings.hindsight_api_key:
-            options["api_key"] = settings.hindsight_api_key
-        self.client = client or Hindsight(**options)
+        self.timeout = settings.hindsight_timeout_seconds
+        if client is not None:
+            self.client = client
+        else:
+            options = {
+                "base_url": settings.hindsight_base_url,
+                "timeout": self.timeout,
+                "max_attempts": 1,
+            }
+            if settings.hindsight_api_key:
+                options["api_key"] = settings.hindsight_api_key
+            self.client = Hindsight(**options)
 
     def retain_memory(self, content: str, context: str | None = None):
         return self.client.retain(bank_id=self.bank_id, content=content, context=context)

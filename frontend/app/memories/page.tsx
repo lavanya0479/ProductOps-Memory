@@ -1,71 +1,40 @@
 "use client";
 
+import { FormEvent, useState } from "react";
 import Link from "next/link";
-
-type MemoryType =
-  | "team_experience"
-  | "historical"
-  | "updated_knowledge";
-
-type Memory = {
-  id: number;
-  product: string;
-  version: string;
-  issue: string;
-  experience: string;
-  source: MemoryType;
-  date: string;
-  status: "Current" | "Historical" | "Updated";
-};
-
-const mockMemories: Memory[] = [
-  {
-    id: 1,
-    product: "Product X",
-    version: "4.2",
-    issue: "E401 Authentication Error",
-    experience:
-      "Restarting did not resolve previous cases. Updating the authentication mapping resolved the issue for customers using legacy authentication.",
-    source: "team_experience",
-    date: "Sep 28, 2026",
-    status: "Historical",
-  },
-  {
-    id: 2,
-    product: "Product X",
-    version: "5.0",
-    issue: "E401 Authentication Error",
-    experience:
-      "The previous authentication mapping workaround is outdated. The current solution is OAuth configuration.",
-    source: "updated_knowledge",
-    date: "Sep 29, 2026",
-    status: "Updated",
-  },
-  {
-    id: 3,
-    product: "Product X",
-    version: "4.2",
-    issue: "Webhook Failure",
-    experience:
-      "Previous webhook failures were resolved by checking the customer's webhook endpoint configuration and retry settings.",
-    source: "team_experience",
-    date: "Sep 27, 2026",
-    status: "Current",
-  },
-  {
-    id: 4,
-    product: "Product X",
-    version: "4.0",
-    issue: "Duplicate Event",
-    experience:
-      "Duplicate events were previously caused by retry behavior when acknowledgement was delayed.",
-    source: "historical",
-    date: "Sep 24, 2026",
-    status: "Historical",
-  },
-];
+import { recallMemory } from "@/lib/api";
+import type { MemoryResult } from "@/lib/types";
 
 export default function MemoriesPage() {
+  const [query, setQuery] = useState("");
+  const [product, setProduct] = useState("");
+  const [memories, setMemories] = useState<MemoryResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!query.trim()) return;
+    setLoading(true);
+    setError("");
+    try {
+      const result = await recallMemory({
+        query: query.trim(),
+        product: product.trim() || undefined,
+        limit: 20,
+      });
+      setMemories(result.memories);
+      setSearched(true);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not search memories");
+      setMemories([]);
+      setSearched(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#020617] text-white">
       {/* Header */}
@@ -129,27 +98,36 @@ export default function MemoriesPage() {
           </Link>
         </div>
 
+        <form onSubmit={handleSearch} className="mt-10 grid gap-4 rounded-2xl border border-slate-800 bg-[#111827] p-6 md:grid-cols-[1fr_16rem_auto] md:items-end">
+          <div>
+            <label htmlFor="memory-query" className="mb-2 block text-sm font-medium">Search team knowledge</label>
+            <input id="memory-query" value={query} onChange={(event) => setQuery(event.target.value)} required placeholder="Describe an issue, solution, or product experience" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-slate-400" />
+          </div>
+          <div>
+            <label htmlFor="memory-product" className="mb-2 block text-sm font-medium">Product (optional)</label>
+            <input id="memory-product" value={product} onChange={(event) => setProduct(event.target.value)} placeholder="Product X" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-slate-400" />
+          </div>
+          <button type="submit" disabled={loading || !query.trim()} className="rounded-lg bg-white px-6 py-3 font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50">{loading ? "Searching..." : "Search"}</button>
+        </form>
+        <p className="mt-3 text-sm text-slate-500">Results are relevant memories returned by search; this API does not provide a complete memory listing.</p>
+
         {/* Memory count */}
         <div className="mt-10 grid gap-4 sm:grid-cols-3">
           <SummaryCard
-            value={mockMemories.length.toString()}
-            label="Memories"
+            value={memories.length.toString()}
+            label="Matching Memories"
           />
 
           <SummaryCard
             value={
-              mockMemories.filter(
-                (memory) => memory.source === "team_experience"
-              ).length.toString()
+              memories.filter((memory) => memory.source.toLowerCase().includes("team")).length.toString()
             }
             label="Team Experiences"
           />
 
           <SummaryCard
             value={
-              mockMemories.filter(
-                (memory) => memory.source === "updated_knowledge"
-              ).length.toString()
+              memories.filter((memory) => memory.text.toLowerCase().includes("corrected knowledge")).length.toString()
             }
             label="Updated Knowledge"
           />
@@ -167,10 +145,14 @@ export default function MemoriesPage() {
             </p>
           </div>
 
+          {loading && <p role="status" className="text-slate-400">Searching organizational memory...</p>}
+          {error && <p role="alert" className="rounded-xl border border-red-900 bg-red-950/40 px-5 py-4 text-sm text-red-200">{error}</p>}
+          {!loading && !error && searched && memories.length === 0 && <p className="text-slate-400">No relevant memories were found for that search.</p>}
+          {!searched && !loading && <p className="text-slate-400">Search for a product issue or experience to find relevant memories.</p>}
           <div className="space-y-6">
-            {mockMemories.map((memory) => (
+            {memories.map((memory, index) => (
               <MemoryCard
-                key={memory.id}
+                key={`${memory.rank}-${index}`}
                 memory={memory}
               />
             ))}
@@ -210,7 +192,7 @@ function SummaryCard({
 function MemoryCard({
   memory,
 }: {
-  memory: Memory;
+  memory: MemoryResult;
 }) {
   const sourceInfo = getSourceInfo(memory.source);
 
@@ -221,7 +203,7 @@ function MemoryCard({
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <h3 className="text-2xl font-semibold">
-              {memory.issue}
+              Memory {memory.rank ?? ""}
             </h3>
 
             <span
@@ -232,14 +214,12 @@ function MemoryCard({
           </div>
 
           <p className="mt-2 text-slate-400">
-            {memory.product}
-            {" • "}
-            Version {memory.version}
+            Retrieved organizational knowledge
           </p>
         </div>
 
         <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-400">
-          {memory.status}
+          {memory.source}
         </span>
       </div>
 
@@ -253,7 +233,7 @@ function MemoryCard({
         </p>
 
         <p className="mt-3 max-w-5xl text-lg leading-8 text-slate-200">
-          {memory.experience}
+          {memory.text}
         </p>
       </div>
 
@@ -268,30 +248,18 @@ function MemoryCard({
             {sourceInfo.label}
           </p>
         </div>
-
-        <div>
-          <p className="text-xs uppercase tracking-wider text-slate-500">
-            Date
-          </p>
-
-          <p className="mt-1 text-sm text-slate-300">
-            {memory.date}
-          </p>
-        </div>
       </div>
 
       {/* Actions */}
       <div className="mt-7 flex flex-wrap gap-3">
         <Link
-          href={`/chat?product=${encodeURIComponent(
-            memory.product
-          )}&issue=${encodeURIComponent(memory.issue)}`}
+          href={`/chat?issue=${encodeURIComponent(memory.text)}`}
           className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800"
         >
           Ask About This
         </Link>
 
-        {memory.source === "team_experience" && (
+        {memory.source.toLowerCase().includes("team") && (
           <Link
             href="/teach"
             className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
@@ -308,27 +276,8 @@ function MemoryCard({
    Source Labels
 ------------------------------ */
 
-function getSourceInfo(source: MemoryType) {
-  switch (source) {
-    case "team_experience":
-      return {
-        label: "Team Experience",
-        badgeClass:
-          "border-slate-600 text-slate-200",
-      };
-
-    case "historical":
-      return {
-        label: "Historical Memory",
-        badgeClass:
-          "border-slate-700 text-slate-400",
-      };
-
-    case "updated_knowledge":
-      return {
-        label: "Updated Knowledge",
-        badgeClass:
-          "border-white/30 text-white",
-      };
-  }
+function getSourceInfo(source: string) {
+  const normalized = source.toLowerCase();
+  const label = normalized.includes("corrected") ? "Updated Knowledge" : normalized.includes("team") ? "Team Experience" : "Historical Memory";
+  return { label, badgeClass: "border-slate-600 text-slate-200" };
 }

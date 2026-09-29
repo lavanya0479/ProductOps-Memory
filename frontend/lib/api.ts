@@ -1,85 +1,99 @@
 import type {
   ChatRequest,
+  ChatResponse,
   TeachMemoryRequest,
   RecallMemoryRequest,
+  RecallResponse,
   CorrectMemoryRequest,
+  RetainResponse,
 } from "./types";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+  (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
 
-async function handleResponse(response: Response) {
-  if (!response.ok) {
-    let message = "Something went wrong";
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 
-    try {
-      const errorData = await response.json();
-
-      if (typeof errorData?.detail === "string") {
-        message = errorData.detail;
-      } else if (typeof errorData?.message === "string") {
-        message = errorData.message;
-      }
-    } catch {
-      // Backend did not return JSON
+async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      signal: init?.signal ?? AbortSignal.timeout(55_000),
+      headers: {
+        Accept: "application/json",
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
+        ...init?.headers,
+      },
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+      throw new ApiError("The request took too long. Check the backend, Hindsight, and model service, then retry.", 0, "request_timeout");
     }
-
-    throw new Error(message);
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError("The request was cancelled. Please retry.", 0, "request_cancelled");
+    }
+    throw new ApiError(
+      `Could not reach the API at ${API_BASE_URL}. Check that the backend is running and NEXT_PUBLIC_API_BASE_URL is correct.`,
+      0,
+      "network_error",
+    );
   }
 
-  return response.json();
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const code = typeof payload?.code === "string" ? payload.code : undefined;
+    const message = code === "memory_unavailable"
+      ? "Memory service unavailable. Check that Hindsight is running at the backend's HINDSIGHT_BASE_URL (default http://localhost:8888) and that any required API key is valid."
+      : code === "llm_unavailable"
+        ? "Language model unavailable. Check the backend LLM_API_KEY and optional LLM_BASE_URL settings."
+        : typeof payload?.detail === "string"
+          ? payload.detail
+          : response.status === 401 || response.status === 403
+            ? "Authentication is required to use this service."
+            : `Request failed (${response.status}). Please try again.`;
+    throw new ApiError(message, response.status, code);
+  }
+
+  return payload as T;
 }
 
 export async function chatWithAgent(request: ChatRequest) {
-  const response = await fetch(`${API_BASE_URL}/api/chat`, {
+  return apiRequest<ChatResponse>("/api/chat", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify(request),
   });
-
-  return handleResponse(response);
 }
 
 export async function teachMemory(request: TeachMemoryRequest) {
-  const response = await fetch(`${API_BASE_URL}/api/memory/teach`, {
+  return apiRequest<RetainResponse>("/api/memory/teach", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify(request),
   });
-
-  return handleResponse(response);
 }
 
 export async function recallMemory(request: RecallMemoryRequest) {
-  const response = await fetch(`${API_BASE_URL}/api/memory/recall`, {
+  return apiRequest<RecallResponse>("/api/memory/recall", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify(request),
   });
-
-  return handleResponse(response);
 }
 
 export async function correctMemory(request: CorrectMemoryRequest) {
-  const response = await fetch(`${API_BASE_URL}/api/memory/correct`, {
+  return apiRequest<RetainResponse>("/api/memory/correct", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify(request),
   });
-
-  return handleResponse(response);
 }
 
 export async function checkBackendHealth() {
-  const response = await fetch(`${API_BASE_URL}/health`);
-
-  return handleResponse(response);
+  return apiRequest<{ status: string }>("/health");
 }

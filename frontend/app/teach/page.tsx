@@ -2,6 +2,8 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
+import { teachMemory } from "@/lib/api";
+import type { MemorySource } from "@/lib/types";
 
 type MemoryForm = {
   product: string;
@@ -12,7 +14,7 @@ type MemoryForm = {
   worked: string;
   failed: string;
   context: string;
-  source: string;
+  source: MemorySource;
 };
 
 const initialForm: MemoryForm = {
@@ -62,13 +64,28 @@ export default function TeachPage() {
 
     setLoading(true);
 
-    // Temporary mock API delay.
-    // This will later be replaced with:
-    // api.teachMemory(form)
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    setLoading(false);
-    setSubmitted(true);
+    try {
+      const experience = [
+        `What happened: ${form.happened.trim()}`,
+        form.tried.trim() && `What was tried: ${form.tried.trim()}`,
+        `What worked: ${form.worked.trim()}`,
+        form.failed.trim() && `What failed: ${form.failed.trim()}`,
+      ].filter(Boolean).join("\n");
+      const context = form.context.trim() || undefined;
+      await teachMemory({
+        product: form.product.trim(),
+        version: form.version.trim() || undefined,
+        issue: form.issue.trim(),
+        experience,
+        source: form.source,
+        context,
+      });
+      setSubmitted(true);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not save this memory");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function teachAnotherMemory() {
@@ -419,16 +436,12 @@ export default function TeachPage() {
                 Team Experience
               </option>
 
-              <option value="historical">
+              <option value="historical_experience">
                 Historical Experience
               </option>
 
-              <option value="official">
+              <option value="official_knowledge">
                 Official Information
-              </option>
-
-              <option value="updated_knowledge">
-                Updated Knowledge
               </option>
             </select>
           </div>
@@ -568,9 +581,8 @@ function InfoItem({
 function formatSource(source: string) {
   const labels: Record<string, string> = {
     team_experience: "Team Experience",
-    historical: "Historical Experience",
-    official: "Official Information",
-    updated_knowledge: "Updated Knowledge",
+    historical_experience: "Historical Experience",
+    official_knowledge: "Official Information",
   };
 
   return labels[source] ?? source;

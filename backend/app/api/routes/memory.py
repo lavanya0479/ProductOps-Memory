@@ -10,11 +10,15 @@ log = logging.getLogger(__name__)
 def _service():
     return AgentService()
 
+def _bank_id():
+    settings = get_settings()
+    return settings.hindsight_bank_id if settings.memory_backend.lower() == "hindsight" else "local-sqlite"
+
 @router.post("/teach", response_model=RetainResponse, summary="Teach a product experience")
 def teach(body: TeachRequest):
     try:
         _service().teach(body)
-        return RetainResponse(status="retained", bank_id=get_settings().hindsight_bank_id)
+        return RetainResponse(status="retained", bank_id=_bank_id())
     except Exception as exc:
         log.warning("Hindsight retain failed: %s", type(exc).__name__)
         raise HTTPException(503, detail="Memory service is temporarily unavailable", headers={"X-Error-Code": "memory_unavailable"}) from exc
@@ -23,7 +27,7 @@ def teach(body: TeachRequest):
 def correct(body: CorrectRequest):
     try:
         _service().correct(body)
-        return RetainResponse(status="retained", bank_id=get_settings().hindsight_bank_id)
+        return RetainResponse(status="retained", bank_id=_bank_id())
     except Exception as exc:
         log.warning("Hindsight correction retain failed: %s", type(exc).__name__)
         raise HTTPException(503, detail="Memory service is temporarily unavailable", headers={"X-Error-Code": "memory_unavailable"}) from exc

@@ -1,35 +1,53 @@
 export interface ChatRequest {
   message: string;
+  product?: string;
+  version?: string;
 }
+
+export interface MemoryResult {
+  text: string;
+  rank: number | null;
+  source: string;
+}
+
+export interface RecallResponse {
+  memories: MemoryResult[];
+  has_relevant_memory: boolean;
+}
+
+export interface ChatResponse extends RecallResponse {
+  answer: string;
+}
+
+export interface RetainResponse {
+  status: "retained";
+  bank_id: string;
+}
+
+export type MemorySource =
+  | "team_experience"
+  | "official_knowledge"
+  | "historical_experience";
 
 export interface TeachMemoryRequest {
   product: string;
-  productVersion: string;
+  version?: string;
   issue: string;
-  whatHappened: string;
-  whatDidYouTry: string;
-  whatWorked: string;
-  whatFailed: string;
-  additionalContext: string;
-  source: string;
+  experience: string;
+  source?: MemorySource;
+  context?: string;
+  customer_context?: string;
 }
 
 export interface RecallMemoryRequest {
   query: string;
+  product?: string;
+  limit?: number;
 }
 
 export interface CorrectMemoryRequest {
-  product: string;
-  productVersion: string;
-  previousKnowledge: string;
+  original_context: string;
   correction: string;
-  additionalExplanation: string;
+  product: string;
+  version?: string;
 }
-
-/*
- * Backend response types are intentionally not defined yet.
- *
- * The backend branch currently contains only README.md.
- * These response schemas will be added after the backend
- * contract is confirmed.
- */
